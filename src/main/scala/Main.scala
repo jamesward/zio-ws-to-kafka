@@ -15,30 +15,31 @@ object Main extends App {
     wsToKafka.fold(_ => 1, _ => 0)
   }
 
-  // todo: externalize config
-  val producerSettings = ProducerSettings(
-    bootstrapServers= List("localhost:9092"),
-    closeTimeout = 30.seconds,
-    extraDriverSettings = Map.empty,
-  )
-
   // todo: exit doesn't work
-  // todo: make[Any, _, _] is needed otherwise we get ZIO[Nothing with Blocking, _, _] and that doesn't work.
-  val wsToKafka = Producer.make[Any, String, String](producerSettings, Serde.string, Serde.string).use { producer =>
-    ZIO.runtime[ZEnv].flatMap { runtime =>
-      val sttpBackendTask = AsyncHttpClientZioStreamsBackend.usingConfigBuilder(runtime, _.setWebSocketMaxFrameSize(1024 * 1024))
+  val wsToKafka = system.env("BOOTSTRAP_SERVERS").flatMap { maybeBootstrapServers =>
+    val producerSettings = ProducerSettings(
+      bootstrapServers= List(maybeBootstrapServers.getOrElse("localhost:9092")),
+      closeTimeout = 30.seconds,
+      extraDriverSettings = Map.empty,
+    )
 
-      sttpBackendTask.flatMap { implicit sttpBackend =>
-        ZioWebSocketHandler().flatMap { webSocketHandler =>
-          basicRequest.get(uri"ws://stackoverflow-to-ws.default.35.224.5.101.nip.io/questions").openWebsocket(webSocketHandler).flatMap { response =>
-            response.result.receiveText().flatMap {
-              case Left(_) =>
-                ZIO.interrupt // todo: is this the right way to close?
-              case Right(text) =>
-                // todo: not UUID for key - question URL?
-                val producerRecord = new ProducerRecord("stackoverflow-questions", UUID.randomUUID().toString, text.payload)
-                producer.produce(producerRecord)
-            }.forever
+    // todo: make[Any, _, _] is needed otherwise we get ZIO[Nothing with Blocking, _, _] and that doesn't work.
+    Producer.make[Any, String, String](producerSettings, Serde.string, Serde.string).use { producer =>
+      ZIO.runtime[ZEnv].flatMap { runtime =>
+        val sttpBackendTask = AsyncHttpClientZioStreamsBackend.usingConfigBuilder(runtime, _.setWebSocketMaxFrameSize(1024 * 1024))
+
+        sttpBackendTask.flatMap { implicit sttpBackend =>
+          ZioWebSocketHandler().flatMap { webSocketHandler =>
+            basicRequest.get(uri"ws://stackoverflow-to-ws.default.35.224.5.101.nip.io/questions").openWebsocket(webSocketHandler).flatMap { response =>
+              response.result.receiveText().flatMap {
+                case Left(_) =>
+                  ZIO.interrupt // todo: is this the right way to close?
+                case Right(text) =>
+                  // todo: not UUID for key - question URL?
+                  val producerRecord = new ProducerRecord("stackoverflow-questions", UUID.randomUUID().toString, text.payload)
+                  producer.produce(producerRecord)
+              }.forever
+            }
           }
         }
       }
