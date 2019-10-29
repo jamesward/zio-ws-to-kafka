@@ -1,4 +1,4 @@
-enablePlugins(JavaAppPackaging, DockerPlugin)
+enablePlugins(JavaAppPackaging)
 
 scalaVersion := "2.12.10"
 
@@ -13,11 +13,3 @@ libraryDependencies ++= Seq(
   "com.softwaremill.sttp.client" %% "async-http-client-backend-zio-streams" % "2.0.0-M7",
   "org.slf4j" % "slf4j-simple" % "1.7.26",
 )
-
-dockerPermissionStrategy := com.typesafe.sbt.packager.docker.DockerPermissionStrategy.Run
-
-dockerRepository := sys.props.get("docker.repo")
-
-dockerUsername := sys.props.get("docker.username")
-
-packageName := sys.props.get("docker.packagename").getOrElse(name.value)
