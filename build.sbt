@@ -1,4 +1,4 @@
-enablePlugins(GraalVMNativeImagePlugin)
+enablePlugins(JavaAppPackaging, DockerPlugin)
 
 scalaVersion := "2.12.10"
 
@@ -14,4 +14,10 @@ libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-simple" % "1.7.26",
 )
 
-graalVMNativeImageOptions += "--static"
+dockerPermissionStrategy := com.typesafe.sbt.packager.docker.DockerPermissionStrategy.Run
+
+dockerRepository := sys.props.get("docker.repo")
+
+dockerUsername := sys.props.get("docker.username")
+
+packageName := sys.props.get("docker.packagename").getOrElse(name.value)
