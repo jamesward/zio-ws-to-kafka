@@ -1,9 +1,10 @@
 import java.util.UUID
 
-import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
+import org.apache.kafka.clients.producer.ProducerRecord
 import sttp.client._
 import sttp.client.asynchttpclient.zio.ZioWebSocketHandler
 import sttp.client.asynchttpclient.ziostreams.AsyncHttpClientZioStreamsBackend
+import sttp.model.Uri
 import zio._
 import zio.kafka.client.{Producer, ProducerSettings}
 import zio.duration._
@@ -15,10 +16,18 @@ object Main extends App {
     wsToKafka.fold(_ => 1, _ => 0)
   }
 
+  case class Config(bootstrapServer: String, kafkaTopic: String, wsServer: Uri)
+
+  val config = for {
+    bootstrapServer <- system.env("BOOTSTRAP_SERVER").someOrFail()
+    kafkaTopic <- system.env("KAFKA_TOPIC").someOrFail()
+    wsServer <- system.env("WS_SERVER").someOrFail().map(Uri(_))
+  } yield Config(bootstrapServer, kafkaTopic, wsServer)
+
   // todo: exit doesn't work
-  val wsToKafka = system.env("BOOTSTRAP_SERVERS").flatMap { maybeBootstrapServers =>
+  val wsToKafka = config.flatMap { config =>
     val producerSettings = ProducerSettings(
-      bootstrapServers= List(maybeBootstrapServers.getOrElse("localhost:9092")),
+      bootstrapServers= List(config.bootstrapServer),
       closeTimeout = 30.seconds,
       extraDriverSettings = Map.empty,
     )
@@ -30,13 +39,13 @@ object Main extends App {
 
         sttpBackendTask.flatMap { implicit sttpBackend =>
           ZioWebSocketHandler().flatMap { webSocketHandler =>
-            basicRequest.get(uri"ws://stackoverflow-to-ws.default.35.224.5.101.nip.io/questions").openWebsocket(webSocketHandler).flatMap { response =>
+            basicRequest.get(config.wsServer).openWebsocket(webSocketHandler).flatMap { response =>
               response.result.receiveText().flatMap {
                 case Left(_) =>
                   ZIO.interrupt // todo: is this the right way to close?
                 case Right(text) =>
                   // todo: not UUID for key - question URL?
-                  val producerRecord = new ProducerRecord("stackoverflow-questions", UUID.randomUUID().toString, text.payload)
+                  val producerRecord = new ProducerRecord(config.kafkaTopic, UUID.randomUUID().toString, text.payload)
                   producer.produce(producerRecord)
               }.forever
             }
