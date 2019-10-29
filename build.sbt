@@ -1,5 +1,7 @@
 enablePlugins(JavaAppPackaging)
 
+name := "zio-ws-to-kafka"
+
 scalaVersion := "2.12.10"
 
 val ZioVersion = "1.0.0-RC15"
