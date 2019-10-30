@@ -21,7 +21,9 @@ object Main extends App {
   val config = for {
     bootstrapServer <- system.env("BOOTSTRAP_SERVER").someOrFail()
     kafkaTopic <- system.env("KAFKA_TOPIC").someOrFail()
-    wsServer <- system.env("WS_SERVER").someOrFail().map(Uri(_))
+    wsServer <- system.env("WS_SERVER").someOrFail().flatMap { wsServer =>
+      ZIO.fromOption(Uri.parse(wsServer).toOption)
+    }
   } yield Config(bootstrapServer, kafkaTopic, wsServer)
 
   // todo: exit doesn't work
