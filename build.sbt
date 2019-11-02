@@ -15,3 +15,5 @@ libraryDependencies ++= Seq(
   "com.softwaremill.sttp.client" %% "async-http-client-backend-zio-streams" % "2.0.0-M7",
   "org.slf4j" % "slf4j-simple" % "1.7.26",
 )
+
+Global / cancelable := false
