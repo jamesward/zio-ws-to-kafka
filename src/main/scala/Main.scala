@@ -1,7 +1,7 @@
 import java.util.UUID
 
 import org.apache.kafka.clients.producer.{
-  ProducerRecord, 
+  ProducerRecord,
   RecordMetadata
 }
 import sttp.client._
@@ -13,10 +13,7 @@ import zio.blocking.Blocking
 import zio.kafka.client.{Producer, ProducerSettings}
 import zio.duration._
 import zio.kafka.client.serde.Serde
-import sttp.client.ws.{
-  WebSocketResponse,
-  WebSocketEvent
-}
+import sttp.client.ws.WebSocketEvent
 import sttp.model.ws.WebSocketFrame
 
 
@@ -58,9 +55,8 @@ object Main extends App {
         sttpBackend <- sttpBackendTask
         webSocketHandler <- ZioWebSocketHandler()
         response <- basicRequest.get(config.wsServer).openWebsocket(webSocketHandler)(sttpBackend, implicitly)
-        text <- response.result.receiveText()
-        result <- handleConnection(config.kafkaTopic, producer)(text).forever
-      } yield result
+        done <- response.result.receiveText().flatMap(handleConnection(config.kafkaTopic, producer)).forever
+      } yield done
 
 
   // Handles a websocket connection
