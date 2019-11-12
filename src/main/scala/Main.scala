@@ -44,14 +44,14 @@ object Main extends App {
       closeTimeout = 30.seconds,
       extraDriverSettings = Map.empty,
     )
-
-    // todo: make[Any, _, _] is needed otherwise we get ZIO[Nothing with Blocking, _, _] and that doesn't work.
-    Producer.make[Any, String, String](producerSettings, Serde.string, Serde.string).use(handleConnections(config))
+    // Note: Serde.string returns [Any,String] for serialization (i.e. serialization does not rely on environment).
+    // However, we want to be more precise in our Environment usage, so we need to fully specify the type here.
+    Producer.make[ZEnv, String, String](producerSettings, Serde.string, Serde.string).use(handleConnections(config))
   }
 
   // This method takes in config + a kafka Producer, and will handle all incoming websocket connection, forever.
   // We return "Nothing" because we never return, infinitely handling connections.
-  def handleConnections(config: Config)(producer: Producer[Any, String, String]): ZIO[ZEnv, Throwable, Nothing] =
+  def handleConnections(config: Config)(producer: Producer[ZEnv, String, String]): ZIO[ZEnv, Throwable, Nothing] =
     for {
         runtime <- ZIO.runtime[ZEnv]
         sttpBackendTask = AsyncHttpClientZioStreamsBackend.usingConfigBuilder(runtime, _.setWebSocketMaxFrameSize(1024 * 1024))
@@ -65,8 +65,8 @@ object Main extends App {
 
   // Handles a websocket connection
   // TODO - look into hiding the Producer in the ZIO environment.
-  def handleConnection(kafkaTopic: String, producer: Producer[Any, String, String])(
-    text: Either[WebSocketEvent.Close,WebSocketFrame.Text]): ZIO[Any with Blocking, Throwable, Task[RecordMetadata]] =
+  def handleConnection(kafkaTopic: String, producer: Producer[ZEnv, String, String])(
+    text: Either[WebSocketEvent.Close,WebSocketFrame.Text]): ZIO[ZEnv with Blocking, Throwable, Task[RecordMetadata]] =
       text match {
         case Left(_) =>
           ZIO.interrupt // todo: is this the right way to close?
